@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Aprovações - v0.4.3</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <style>
+        body { font-size: 0.9rem; }
+        .sticky-header { position: sticky; top: 0; background: white; z-index: 1; }
+        .scrollable-table { max-height: 150px; overflow-y: auto; }
+    </style>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">RDVSmart</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('add_expense') }}"><i class="fas fa-plus"></i> Despesa</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('advance_request') }}"><i class="fas fa-money-check-alt"></i> Antecipação</a>
+                    </li>
+                    {% if current_user.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('create_group') }}"><i class="fas fa-users"></i> Departamento</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('report') }}"><i class="fas fa-chart-bar"></i> Relatórios</a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link">{{ current_user.username }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Sair</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5 animate-fade-in">
+        <h1><i class="fas fa-shield-alt"></i> Gerenciar Aprovações</h1>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="alert alert-success">
+                    {{ messages[0] }}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="card">
+            <div class="card-header">
+                <h5>Configurar Usuários</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Usuário</th>
+                            <th>Nível de Aprovação</th>
+                            <th>Gestor</th>
+                            <th>Limite de Aprovação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                            <tr>
+                                <td>{{ user.username }}</td>
+                                <td>
+                                    {{ 'Usuário' if user.approval_level == 1 else 'Gestor' if user.approval_level == 2 else 'Admin' }}
+                                </td>
+                                <td>{{ user.manager.username if user.manager else 'Nenhum' }}</td>
+                                <td>R${{ user.approval_limit }}</td>
+                                <td>
+                                    <form method="POST">
+                                        <input type="hidden" name="user_id" value="{{ user.id }}">
+                                        <div class="mb-3">
+                                            <label class="form-label">Nível de Aprovação</label>
+                                            <select name="approval_level" class="form-control">
+                                                <option value="1" {{ 'selected' if user.approval_level == 1 }}>Usuário</option>
+                                                <option value="2" {{ 'selected' if user.approval_level == 2 }}>Gestor</option>
+                                                <option value="3" {{ 'selected' if user.approval_level == 3 }}>Admin</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Gestor</label>
+                                            <select name="manager_id" class="form-control">
+                                                <option value="None">Nenhum</option>
+                                                {% for manager in users %}
+                                                    {% if manager.id != user.id %}
+                                                        <option value="{{ manager.id }}" {{ 'selected' if user.manager_id == manager.id }}>{{ manager.username }}</option>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Limite de Aprovação</label>
+                                            <input type="number" name="approval_limit" class="form-control" value="{{ user.approval_limit }}" step="0.01">
+                                        </div>
+                                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

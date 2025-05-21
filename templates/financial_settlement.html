@@ -1,0 +1,203 @@
+<!--v0.4.4.4.5-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acerto Financeiro - RDVSmart</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <style>
+        body { font-size: 0.9rem; }
+        table { font-size: 0.72rem; }
+        .sticky-header { position: sticky; top: 0; background: white; z-index: 1; }
+        .scrollable-table { max-height: 600px; overflow-y: auto; }
+    </style>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">RDVSmart</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {% if current_user.approval_level == 3 %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('create_group') }}"><i class="fas fa-users"></i> Departamento</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('financial_settlement') }}"><i class="fas fa-balance-scale"></i> Acerto Financeiro</a>
+                    </li>
+                    {% endif %}                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('add_expense') }}"><i class="fas fa-plus"></i> Despesa</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('advance_request') }}"><i class="fas fa-money-check-alt"></i> Antecipação</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('report') }}"><i class="fas fa-chart-bar"></i> Relatórios</a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link">{{ current_user.username }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Sair</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5 animate-fade-in">
+        <h1><i class="fas fa-balance-scale"></i> Acerto Financeiro</h1>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="alert alert-success">
+                    {{ messages[0] }}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Filtros -->
+        <form method="GET" class="mb-4">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="user_email" class="form-label">E-mail do Usuário</label>
+                    <input type="email" name="user_email" id="user_email" class="form-control" value="{{ request.args.get('user_email', '') }}" placeholder="Filtrar por e-mail">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="date" class="form-label">Data</label>
+                    <input type="date" name="date" id="date" class="form-control" value="{{ request.args.get('date', '') }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="event_name" class="form-label">Evento</label>
+                    <input type="text" name="event_name" id="event_name" class="form-control" value="{{ request.args.get('event_name', '') }}" placeholder="Filtrar por evento">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtrar</button>
+        </form>
+
+        <!-- Tabela de Acertos -->
+        <div class="card">
+            <div class="card-body">
+                <div class="scrollable-table">
+                    <table class="table table-hover table-expandable">
+                        <thead class="sticky-header">
+                            <tr>
+                                <th>Usuário</th>
+                                <th>Data da Antecipação</th>
+                                <th>Evento</th>
+                                <th>Valor Total</th>
+                                <th>Saldo Restante</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for settlement in settlements %}
+                                <tr class="settlement-row" data-id="{{ settlement.id }}">
+                                    <td>{{ settlement.user.email }}</td>
+                                    <td>{{ settlement.created_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ settlement.advance.event.nome_evento if settlement.advance.event else 'Nenhum' }}</td>
+                                    <td>R$ {{ "{:.2f}".format(settlement.total_amount).replace('.', ',') }}</td>
+                                    <td>R$ {{ "{:.2f}".format(settlement.balance).replace('.', ',') }}</td>
+                                    <td>
+                                        <button class="btn btn-primary btn-sm toggle-details" data-id="{{ settlement.id }}">
+                                            <i class="fas fa-chevron-down"></i> Detalhes
+                                        </button>
+                                        {% if settlement.status == 'OPEN' and current_user.approval_level == 3 %}
+                                            <form action="{{ url_for('close_settlement', settlement_id=settlement.id) }}" method="POST" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-check"></i> Fechar Acerto</button>
+                                            </form>
+                                            <form action="{{ url_for('refund_settlement', settlement_id=settlement.id) }}" method="POST" style="display:inline;" class="refund-form">
+                                                <input type="number" name="refund_amount" step="0.01" min="0" max="{{ settlement.balance }}" class="form-control d-inline-block" style="width: 100px;" placeholder="Devolução" required>
+                                                <button type="submit" class="btn btn-sm btn-warning"><i class="fas fa-undo"></i> Devolver</button>
+                                            </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr class="details" data-id="{{ settlement.id }}" style="display:none;">
+                                    <td colspan="6">
+                                        <h5>Despesas Vinculadas</h5>
+                                        <table class="table table-bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th>Data</th>
+                                                    <th>Descrição</th>
+                                                    <th>Categoria</th>
+                                                    <th>Valor</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for expense in settlement.advance.expenses %}
+                                                    <tr>
+                                                        <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                                                        <td>{{ expense.description }}</td>
+                                                        <td>{{ expense.category }}</td>
+                                                        <td>R$ {{ "{:.2f}".format(expense.amount).replace('.', ',') }}</td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.querySelectorAll('.toggle-details').forEach(button => {
+            button.addEventListener('click', () => {
+                const id = button.getAttribute('data-id');
+                const detailsRow = document.querySelector(`tr.details[data-id="${id}"]`);
+                detailsRow.style.display = detailsRow.style.display === 'none' ? 'table-row' : 'none';
+                const icon = button.querySelector('i');
+                icon.classList.toggle('fa-chevron-down');
+                icon.classList.toggle('fa-chevron-up');
+            });
+        });
+
+        document.querySelectorAll('.refund-form').forEach(form => {
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const formData = new FormData(form);
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    const notifications = document.createElement('div');
+                    notifications.className = 'alert alert-success mt-3';
+                    notifications.textContent = result.message;
+                    result.email_status.forEach(status => {
+                        const alertClass = status.status === 'success' ? 'alert-success' : 'alert-danger';
+                        const alert = document.createElement('div');
+                        alert.className = `alert ${alertClass} mt-2`;
+                        alert.textContent = `${status.message} para ${status.recipient}`;
+                        notifications.appendChild(alert);
+                    });
+                    form.closest('.container').prepend(notifications);
+                    setTimeout(() => window.location.reload(), 2000);
+                } catch (error) {
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-danger mt-3';
+                    alert.textContent = `Erro: ${error.message}`;
+                    form.closest('.container').prepend(alert);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

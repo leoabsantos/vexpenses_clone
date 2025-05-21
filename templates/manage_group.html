@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Departamento {{ group.name }} - v0.0.4.2</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <style>
+        body { font-size: 0.9rem; }
+        .sticky-header { position: sticky; top: 0; background: white; z-index: 1; }
+        .scrollable-table { max-height: 150px; overflow-y: auto; }
+    </style>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">RDVSmart</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('add_expense') }}"><i class="fas fa-plus"></i> Despesa</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('advance_request') }}"><i class="fas fa-money-check-alt"></i> Antecipação</a>
+                    </li>
+                    {% if current_user.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="{{ url_for('create_group') }}"><i class="fas fa-users"></i> Departamento</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('report') }}"><i class="fas fa-chart-bar"></i> Relatórios</a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link">{{ current_user.username }}</span>
+                    </li> 
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Sair</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5 animate-fade-in">
+        <h1><i class="fas fa-users"></i> Gerenciar Departamento: {{ group.name }}</h1>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="alert alert-success">
+                    {{ messages[0] }}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Formulário para adicionar membro -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Adicionar Membro</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="action" value="add">
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-user"></i> Nome de Usuário</label>
+                        <input type="text" class="form-control" name="username" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Adicionar</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Lista de membros -->
+        <div class="card">
+            <div class="card-header">
+                <h5>Membros do Departamento</h5>
+            </div>
+            <div class="card-body">
+                {% if members %}
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Usuário</th>
+                                <th>E-mail</th>
+                                <th>Gestor</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for member in members %}
+                                <tr>
+                                    <td>{{ member.user.username }}</td>
+                                    <td>{{ member.user.email }}</td>
+                                    <td>{{ 'Sim' if member.is_group_manager else 'Não' }}</td>
+                                    <td>
+                                        <form method="POST" style="display:inline;">
+                                            <input type="hidden" name="action" value="toggle_manager">
+                                            <input type="hidden" name="member_id" value="{{ member.user_id }}">
+                                            <button type="submit" class="btn btn-sm btn-warning">
+                                                <i class="fas fa-user-shield"></i> {{ 'Remover Gestor' if member.is_group_manager else 'Tornar Gestor' }}
+                                            </button>
+                                        </form>
+                                        <form method="POST" style="display:inline;">
+                                            <input type="hidden" name="action" value="remove">
+                                            <input type="hidden" name="member_id" value="{{ member.user_id }}">
+                                            <button type="submit" class="btn btn-sm btn-danger" {{ 'disabled' if member.user_id == current_user.id }}>
+                                                <i class="fas fa-trash"></i> Remover
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p>Nenhum membro no Departamento.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <a href="{{ url_for('create_group') }}" class="btn btn-secondary mt-3"><i class="fas fa-arrow-left"></i> Voltar</a>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

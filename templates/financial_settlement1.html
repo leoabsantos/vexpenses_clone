@@ -1,0 +1,145 @@
+<!--v0.4.4.4.5-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acerto Financeiro - v0.4.3</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">RDVSmart_index</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('add_expense') }}"><i class="fas fa-plus"></i> Despesa</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('advance_request') }}"><i class="fas fa-money-check-alt"></i> Antecipação</a>
+                    </li>
+                    {% if current_user.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('create_group') }}"><i class="fas fa-users"></i> Departamento</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('report') }}"><i class="fas fa-chart-bar"></i> Relatórios</a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link">{{ current_user.username }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Sair</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5 animate-fade-in">
+        <h1><i class="fas fa-balance-scale"></i> Acerto Financeiro</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Antecipações Aprovadas</h5>
+            </div>
+            <div class="card-body">
+                {% if advance_data %}
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Usuário</th>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Valor Total</th>
+                                <th>Despesas</th>
+                                <th>Saldo Restante</th>
+                                <th>Diferença</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for data in advance_data %}
+                                <tr data-bs-toggle="collapse" data-bs-target="#expenses-{{ data.advance.id }}" class="accordion-toggle">
+                                    <td>{{ data.advance.user.username }}</td>
+                                    <td>{{ data.advance.date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ data.advance.description }}</td>
+                                    <td>R${{ '%.2f' % data.advance.amount }}</td>
+                                    <td>R${{ '%.2f' % data.total_expenses }}</td>
+                                    <td>R${{ '%.2f' % data.advance.remaining_balance }}</td>
+                                    <td>R${{ '%.2f' % data.balance_diff }}</td>
+                                    <td>
+                                        {% if data.advance.status == 'aprovado' %}
+                                            <form method="POST" action="{{ url_for('financial_settlement') }}" style="display:inline;">
+                                                <input type="hidden" name="advance_id" value="{{ data.advance.id }}">
+                                                <button type="submit" class="btn btn-sm btn-primary">
+                                                    <i class="fas fa-check-circle"></i> Fechar Acerto
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Concluído</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="8" class="p-0">
+                                        <div class="collapse" id="expenses-{{ data.advance.id }}">
+                                            <div class="card card-body">
+                                                {% if data.expenses %}
+                                                    <h6>Despesas Vinculadas</h6>
+                                                    <table class="table table-sm">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Data</th>
+                                                                <th>Descrição</th>
+                                                                <th>Categoria</th>
+                                                                <th>Valor</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for expense in data.expenses %}
+                                                                <tr>
+                                                                    <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                                                                    <td>{{ expense.description }}</td>
+                                                                    <td>{{ expense.category }}</td>
+                                                                    <td>R${{ '%.2f' % expense.amount }}</td>
+                                                                </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                {% else %}
+                                                    <p>Nenhuma despesa vinculada.</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p>Nenhuma antecipação aprovada para acerto.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

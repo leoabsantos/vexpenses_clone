@@ -1,0 +1,207 @@
+<!--v0.4.4.4.5-->
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+
+        document.querySelector('form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            const notifications = document.createElement('div');
+            notifications.className = 'alert alert-success mt-3';
+            notifications.textContent = result.message;
+            result.email_status.forEach(status => {
+                const alertClass = status.status === 'queued' ? 'alert-info' : 'alert-danger';
+                const alert = document.createElement('div');
+                alert.className = `alert ${alertClass} mt-2`;
+                alert.textContent = status.message;
+                notifications.appendChild(alert);
+            });
+            form.before(notifications);
+            form.reset();
+            document.getElementById('amount').value = '0,00';
+        } catch (error) {
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger mt-3';
+            alert.textContent = `Erro: ${error.message}`;
+            form.before(alert);
+        }
+    });
+</script>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Adicionar Despesa - v0.0.4.2</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <style>
+        body { font-size: 0.9rem; }
+        .sticky-header { position: sticky; top: 0; background: white; z-index: 1; }
+        .scrollable-table { max-height: 150px; overflow-y: auto; }
+    </style>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">RDVSmart</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('add_expense') }}"><i class="fas fa-plus"></i> Despesa</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('advance_request') }}"><i class="fas fa-money-check-alt"></i> Antecipação</a>
+                    </li>
+                    {% if current_user.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('create_group') }}"><i class="fas fa-users"></i> Departamento</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('report') }}"><i class="fas fa-chart-bar"></i> Relatórios</a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link">{{ current_user.username }}</span>
+                    </li>                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Sair</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <div class="container mt-5 animate-fade-in">
+        <h1><i class="fas fa-plus"></i> Adicionar Despesa</h1>
+        <p><strong>Saldo de antecipação disponível:</strong> R${{ total_advance_balance }}</p>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="alert alert-success">
+            {{ messages[0] }}
+        </div>
+        {% endif %}
+        {% endwith %}
+        <form method="POST" enctype="multipart/form-data">
+            <div class="form-group mb-3">
+                <label><i class="fas fa-dollar-sign"></i> Valor</label>
+                <input type="number" step="0.01" name="amount" class="form-control" required>
+            </div>
+            <div class="form-group mb-3">
+                <label><i class="fas fa-tags"></i> Categoria</label>
+                <select class="form-select" id="category" name="category" required>
+                    {% for category in categories %}
+                        <option value="{{ category }}">{{ category }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group mb-3">
+                <label><i class="fas fa-comment"></i> Descrição</label>
+                <input type="text" name="description" class="form-control" required>
+            </div>
+            <div class="form-group mb-3">
+                <label><i class="fas fa-users"></i> Departamento</label>
+                <select name="group_id" class="form-control">
+                    {% for group in groups %}
+                    <option value="{{ group.id }}">{{ group.name }}</option>
+                    {% endfor %}
+                    <option value="">Nenhum</option>
+                </select>
+            </div>
+            <div class="form-group mb-3">
+                <label><i class="fas fa-calendar-alt"></i> Evento</label>
+                <select class="form-select" id="event" name="event">
+                    <option value="">Nenhum</option>
+                    {% for event in events %}
+                        <option value="{{ event.nome_evento }}" {% if event.nome_evento == selected_event %}selected{% endif %}>{{ event.mes_evento }} - {{ event.nome_evento }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group mb-3">
+                <label><i class="fas fa-file-upload"></i> Comprovante</label>
+                <input type="file" name="receipt" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Adicionar</button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Voltar</a>
+        </form>
+    </div>
+    <script>
+        const amountInput = document.getElementById('amount');
+
+        amountInput.addEventListener('input', function() {
+            let value = this.value.replace(/[^0-9]/g, ''); // Remove tudo que não é número
+            
+            // Garante que sempre haja pelo menos dois dígitos
+            if (value.length < 3) {
+                value = value.padStart(3, '0'); // Preenche com zeros à esquerda
+            }
+
+            // Divide a entrada em parte inteira e decimal
+            let integerPart = value.slice(0, -2);
+            let decimalPart = value.slice(-2);
+
+            // Formata o valor
+            let formattedValue = integerPart + ',' + decimalPart;
+            this.value = formattedValue;
+        });
+
+        // Garante que o valor inicial seja formatado corretamente
+        window.onload = function() {
+            if (!amountInput.value) {
+                amountInput.value = "0,00";
+            }
+            else{
+            amountInput.dispatchEvent(new Event('input'));
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

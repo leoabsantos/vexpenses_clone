@@ -1,0 +1,396 @@
+<!--v0.4.4.4.5-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - v0.4.3</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <style>
+        body { font-size: 0.9rem; }
+        .sticky-header { position: sticky; top: 0; background: white; z-index: 1; }
+        .scrollable-table { max-height: 150px; overflow-y: auto; }
+    </style>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">RDVSmart_index</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {% if current_user.approval_level == 3 %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('create_group') }}"><i class="fas fa-users"></i> Departamento</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('financial_settlement') }}"><i class="fas fa-balance-scale"></i> Acerto Financeiro</a>
+                    </li>
+                    {% endif %}                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('add_expense') }}"><i class="fas fa-plus"></i> Nova Despesa</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('advance_request') }}"><i class="fas fa-money-check-alt"></i> Antecipação</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('report') }}"><i class="fas fa-chart-bar"></i> Relatórios</a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link">{{ current_user.username }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Sair</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5 animate-fade-in">
+        <h1><i class="fas fa-tachometer-alt"></i> Dashboard</h1>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="alert alert-success">
+                    {{ messages[0] }}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Resumo</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Total de Despesas:</strong> R${{ total_expenses }}</p>
+                        <p><strong>Despesas Pendentes Aprov.:</strong> {{ pending_count }}</p>
+                        <p><strong>Saldo de Antecipação:</strong> R${{ total_advance_balance }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Últimas Despesas
+                            <a href="{{ url_for('add_expense', event=last_event) }}" class="btn btn-primary btn-sm float-end"><i class="fas fa-plus"></i> Novo Lançamento</a>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if expenses %}
+                            <div class="scrollable-table">
+                                <table class="table table-hover">
+                                    <thead class="sticky-header">
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Usuário</th>
+                                            <th>Evento</th>
+                                            <th>Data</th>
+                                            <th>Descrição</th>
+                                            <th>Categoria</th>
+                                            <th>Valor</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for expense, username, nome_evento in expenses %}
+                                            <tr>
+                                                <td>D-{{ expense.id }}</td>
+                                                <td>{{ username }}</td>
+                                                <td style="text-align: left;">{{ nome_evento or 'Nenhum' }}</td>
+                                                <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                                                <td>{{ expense.description }}</td>
+                                                <td>{{ expense.category }}</td>
+                                                <td {% if expense.amount < 0 %}class="text-danger"{% endif %}>
+                                                    R$ {{ "{:.2f}".format(expense.amount).replace('.', ',').replace('-', '- ') }}
+                                                </td>
+                                                <td>
+                                                    {% if expense.status == 'pendente' %}
+                                                        <span class="badge bg-warning">Pendente</span>
+                                                    {% elif expense.status == 'aprovado' %}
+                                                        <span class="badge bg-success">Aprovado</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Rejeitado</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p>Nenhuma despesa registrada.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Minhas Solicitações de Antecipação -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-money-check-alt"></i> Solicitações de Antecipação</h5>
+            </div>
+            <div class="card-body">
+                {% if advances %}
+                    <div class="scrollable-table">
+                        <table class="table table-hover">
+                            <thead class="sticky-header">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Usuário</th>
+                                    <th>Evento</th>
+                                    <th>Data</th>
+                                    <th>Descrição</th>
+                                    <th>Categoria</th>
+                                    <th>Valor</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for advance in advances %}
+                                    <!-- advance é uma tupla (Advance, username, nome_evento); usar advance[0] para o objeto Advance -->
+                                    <tr>
+                                        <td>A-{{ advance[0].id }}</td>
+                                        <td>{{ advance[1] }}</td>
+                                        <td style="text-align: left;">{{ advance[2] if advance[2] else 'Nenhum' }}</td>
+                                        <td>{{ advance[0].date.strftime('%Y-%m-%d') }}</td>
+                                        <td>{{ advance[0].description }}</td>
+                                        <td>Antecipação</td>
+                                        <td {% if advance[0].amount < 0 %}class="text-danger"{% endif %}>
+                                            R$ {{ "{:.2f}".format(advance[0].amount).replace('.', ',').replace('-', '-R$ ') }}
+                                        </td>
+                                        <td>
+                                            {% if advance[0].status == 'pendente' %}
+                                                <span class="badge bg-warning">Pendente</span>
+                                            {% elif advance[0].status == 'aprovado' %}
+                                                <span class="badge bg-success">Aprovado</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">Rejeitado</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p>Nenhuma solicitação de antecipação registrada.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if current_user.is_manager %}
+            <!-- Despesas Pendentes de Aprovação -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Despesas Pendentes de Aprovação</h5>
+                </div>
+                <div class="card-body">
+                    {% if pending_approvals %}
+                        <div class="scrollable-table">
+                            <table class="table table-hover">
+                                <thead class="sticky-header">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Usuário</th>
+                                        <th>Evento</th>
+                                        <th>Data</th>
+                                        <th>Descrição</th>
+                                        <th>Categoria</th>
+                                        <th>Valor</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for expense in pending_approvals %}
+                                        <tr>
+                                            <td>D-{{ expense.id }}</td>
+                                            <td>{{ expense.user.username }}</td>
+                                            <td style="text-align: left;">{{ expense.event.nome_evento if expense.event else 'Nenhum' }}</td>
+                                            <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                                            <td>{{ expense.description }}</td>
+                                            <td>{{ expense.category }}</td>
+                                            <td {% if expense.amount < 0 %}class="text-danger"{% endif %}>
+                                                R$ {{ "{:.2f}".format(expense.amount).replace('.', ',').replace('-', '-R$ ') }}
+                                            </td>
+                                            <td>
+                                                {% if expense.status == 'pendente' %}
+                                                    <span class="badge bg-warning">Pendente</span>
+                                                {% elif expense.status == 'aprovado' %}
+                                                    <span class="badge bg-success">Aprovado</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">Rejeitado</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <form method="POST" action="{{ url_for('approve_expense', expense_id=expense.id, action='approve') }}" style="display:inline;">
+                                                    <button type="submit" class="btn btn-sm btn-success"><i class="fas fa-check"></i> Aprovar</button>
+                                                </form>
+                                                <form method="POST" action="{{ url_for('approve_expense', expense_id=expense.id, action='reject') }}" style="display:inline;">
+                                                    <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-times"></i> Rejeitar</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p>Nenhuma despesa pendente de aprovação.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if current_user.is_manager %}
+                <!-- Antecipações Pendentes de Aprovação -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Antecipações Pendentes de Aprovação</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if pending_advance_approvals %}
+                            <div class="scrollable-table">
+                                <table class="table table-hover">
+                                    <thead class="sticky-header">
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Usuário</th>
+                                            <th>Evento</th>
+                                            <th>Data</th>
+                                            <th>Descrição</th>
+                                            <th>Categoria</th>
+                                            <th>Valor</th>
+                                            <th>Status</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for advance in pending_advance_approvals %}
+                                            <!-- advance é uma tupla (Advance, username, nome_evento); usar advance[0] para o objeto Advance -->
+                                            <tr>
+                                                <td>A-{{ advance[0].id }}</td>
+                                                <td>{{ advance[1] }}</td>
+                                                <td style="text-align: left;">{{ advance[2] if advance[2] else 'Nenhum' }}</td>
+                                                <td>{{ advance[0].date.strftime('%Y-%m-%d') }}</td>
+                                                <td>{{ advance[0].description }}</td>
+                                                <td>Antecipação</td>
+                                                <td {% if advance[0].amount < 0 %}class="text-danger"{% endif %}>
+                                                    R$ {{ "{:.2f}".format(advance[0].amount).replace('.', ',').replace('-', '-R$ ') }}
+                                                </td>
+                                                <td>
+                                                    {% if advance[0].status == 'pendente' %}
+                                                        <span class="badge bg-warning">Pendente</span>
+                                                    {% elif advance[0].status == 'aprovado' %}
+                                                        <span class="badge bg-success">Aprovado</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Rejeitado</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <form action="{{ url_for('approve_advance', advance_id=advance[0].id, action='approve') }}" method="POST" style="display:inline;">
+                                                        <button type="submit" class="btn btn-success btn-sm">Aprovar</button>
+                                                    </form>
+                                                    <form action="{{ url_for('approve_advance', advance_id=advance[0].id, action='reject') }}" method="POST" style="display:inline;">
+                                                        <button type="submit" class="btn btn-danger btn-sm">Rejeitar</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p>Nenhuma antecipação pendente de aprovação.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Administração (apenas para admins) -->
+            {% if current_user.approval_level == 3 %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-cog"></i> Administração</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('index') }}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard Principal
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('dashboard_new') }}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-exchange-alt"></i> Dashboard Novo
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('add_expense') }}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-plus"></i> Adicionar Despesa
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('advance_request') }}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-money-check-alt"></i> Solicitar Antecipação
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('manage_approvals') }}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-user-check"></i> Gerenciar Aprovações
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('create_group') }}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-users"></i> Criar Departamento
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('report') }}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-chart-bar"></i> Relatórios
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="dropdown">
+                                <button class="btn btn-outline-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-users"></i> Usuários
+                                </button>
+                                <ul class="dropdown-menu">
+                                    {% for user in users %}
+                                    <li><a class="dropdown-item" href="{{ url_for('user', user_id=user.id) }}">{{ user.name }}</a></li>
+                                    {% else %}
+                                    <li><a class="dropdown-item disabled">Nenhum Usuário</a></li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="dropdown">
+                                <button class="btn btn-outline-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-users"></i> Departamentos
+                                </button>
+                                <ul class="dropdown-menu">
+                                    {% for group in groups %}
+                                    <li><a class="dropdown-item" href="{{ url_for('group', group_id=group.id) }}">{{ group.name }}</a></li>
+                                    {% else %}
+                                    <li><a class="dropdown-item disabled">Nenhum departamento</a></li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    </body>
+</html>
